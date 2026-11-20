@@ -101,7 +101,7 @@ class LocalModel:
             literal = prefix.replace("\\", "\\\\").replace('"', '\\"')
             req["grammar"] = 'root ::= "' + literal + '" [^\\n\\r]*'
         body = json.dumps(req)
-        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=4)
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=8)
         try:
             c.request("POST", "/completion", body, {"Content-Type": "application/json"})
             resp = c.getresponse()
@@ -116,7 +116,11 @@ class LocalModel:
         with self._lock:
             t = time.perf_counter()
             prompt, prefix = split_for_healing(context)
-            data = self._request(prompt, 20, prefix)
+            try:
+                data = self._request(prompt, 20, prefix)
+            except OSError as e:  # e.g. still warming up right after the model loads
+                log.debug("completion request failed: %s", e)
+                return None
             log.debug("completion in %.0f ms", (time.perf_counter() - t) * 1000)
         out = data.get("content", "")
         if not out.startswith(prefix):

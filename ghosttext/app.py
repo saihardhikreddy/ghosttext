@@ -13,10 +13,32 @@ from ctypes import wintypes as wt  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
 from . import win32 as w  # noqa: E402
-from .config import APP_DIR, ROOT, Config  # noqa: E402
+from .config import APP_DIR, FROZEN, ROOT, Config  # noqa: E402
 
 log = logging.getLogger("ghosttext")
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+WM_HOTKEY = 0x312
+MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, MOD_NOREPEAT = 0x1, 0x2, 0x4, 0x8, 0x4000
+HOTKEY_ID = 1
+
+
+def parse_hotkey(text):
+    """'ctrl+alt+g' -> (modifiers, virtual key)."""
+    mods, vk = MOD_NOREPEAT, 0
+    for part in text.lower().replace(" ", "").split("+"):
+        if part in ("ctrl", "control"):
+            mods |= MOD_CONTROL
+        elif part == "alt":
+            mods |= MOD_ALT
+        elif part == "shift":
+            mods |= MOD_SHIFT
+        elif part == "win":
+            mods |= MOD_WIN
+        elif len(part) == 1:
+            vk = ord(part.upper())
+        elif part == "space":
+            vk = 0x20
+    return mods, vk
 
 
 def make_icon(size=64, paused=False):
@@ -37,6 +59,8 @@ def make_icon(size=64, paused=False):
 
 
 def autostart_command():
+    if FROZEN:
+        return f'"{sys.executable}"'
     pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
     return f'"{pyw}" "{ROOT / "GhostText.pyw"}"'
 
@@ -74,6 +98,7 @@ class App:
         self.ui_thread_id = None
         self.icon = None
         self._ui_ready = threading.Event()
+        self.hotkey = None
 
     # ------------------------------------------------------------ threads
     def _ui_loop(self):
@@ -83,6 +108,13 @@ class App:
         try:
             self.overlay.create()
             self.engine.install()
+            # Use the configured shortcut, or the first free fallback if another app owns it.
+            for hk in [self.config["hotkey"], "ctrl+shift+g", "ctrl+alt+h", "ctrl+shift+h"]:
+                mods, vk = parse_hotkey(hk)
+                if vk and ctypes.windll.user32.RegisterHotKey(None, HOTKEY_ID, mods, vk):
+                    self.hotkey = hk
+                    break
+                log.warning("hotkey %s is taken by another app", hk)
         finally:
             self._ui_ready.set()
         msg = wt.MSG()
@@ -90,9 +122,46 @@ class App:
             if msg.message == WM_REINSTALL_HOOKS and not msg.hwnd:
                 self.engine.reinstall()
                 continue
+            if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
+                self.set_enabled(not self.config["enabled"], announce=True)
+                continue
             w.TranslateMessage(ctypes.byref(msg))
             w.DispatchMessageW(ctypes.byref(msg))
         self.engine.uninstall()
+
+    def set_enabled(self, on, announce=False):
+        self.config["enabled"] = on
+        self.engine.refresh_exclusion()
+        if self.icon:
+            self.icon.icon = make_icon(paused=not on)
+            if announce:
+                self.notify("GhostText is on" if on else "GhostText is paused",
+                            f"Press {self.hotkey_label()} to "
+                            + ("pause." if on else "turn it back on."))
+
+    def hotkey_label(self):
+        return (self.hotkey or "no shortcut").title().replace("+", " + ")
+
+    def notify(self, title, text):
+        try:
+            self.icon.notify(text, title)
+        except Exception:
+            log.debug("notification failed", exc_info=True)
+
+    def _first_run(self):
+        """Like any background helper: start with Windows from now on (installed app only)."""
+        if self.config["first_run_done"]:
+            return
+        self.config["first_run_done"] = True
+        if FROZEN and not autostart_enabled():
+            try:
+                set_autostart(True)
+            except OSError:
+                log.exception("couldn't enable start with Windows")
+        hk = self.hotkey_label()
+        self.notify("GhostText is running",
+                    f"Pause for a grey suggestion, Tab to accept. {hk} turns it on/off. "
+                    "Settings are in the tray icon.")
 
     def _load_dictionary(self):
         from .autocorrect import AutoCorrect
@@ -115,9 +184,10 @@ class App:
 
         def toggle(key):
             def f(icon, item):
-                cfg[key] = not cfg[key]
                 if key == "enabled":
-                    icon.icon = make_icon(paused=not cfg["enabled"])
+                    self.set_enabled(not cfg["enabled"])
+                    return
+                cfg[key] = not cfg[key]
                 self.engine.refresh_exclusion()
             return f
 
@@ -156,7 +226,7 @@ class App:
         menu = Menu(
             Item(status_text, None, enabled=False),
             Menu.SEPARATOR,
-            Item("Enabled", toggle("enabled"), checked=lambda i: cfg["enabled"], default=True),
+            Item(lambda i: f"Enabled ({self.hotkey_label()})", toggle("enabled"), checked=lambda i: cfg["enabled"], default=True),
             Item("Autocomplete (Tab to accept)", toggle("autocomplete"), checked=lambda i: cfg["autocomplete"]),
             Item("Autocorrect typos", toggle("autocorrect"), checked=lambda i: cfg["autocorrect"]),
             Item(lambda i: f"Turn off in {last_app()}", toggle_app,
@@ -171,9 +241,13 @@ class App:
         self.icon = pystray.Icon("GhostText", make_icon(paused=not cfg["enabled"]),
                                  "GhostText: offline autocomplete", menu)
         try:
-            self.icon.run()
+            self.icon.run(setup=self._on_tray_ready)
         finally:
             self.shutdown()
+
+    def _on_tray_ready(self, icon):
+        icon.visible = True
+        threading.Timer(1.5, self._first_run).start()
 
     def shutdown(self):
         if self.ui_thread_id:

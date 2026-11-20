@@ -1,15 +1,21 @@
 """User settings, stored as JSON in %APPDATA%\\GhostText\\config.json."""
 import json
 import os
+import sys
 import threading
 from pathlib import Path
 
 APP_DIR = Path(os.environ.get("APPDATA", Path.home())) / "GhostText"
 CONFIG_PATH = APP_DIR / "config.json"
-ROOT = Path(__file__).resolve().parent.parent  # the ghost-text folder
+FROZEN = getattr(sys, "frozen", False)
+# Where bin\ and models\ live: next to GhostText.exe, or the source checkout.
+ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 
 DEFAULTS = {
     "enabled": True,
+    # Global shortcut that turns GhostText on/off.
+    "hotkey": "ctrl+alt+g",
+    "first_run_done": False,
     "autocomplete": True,
     "autocorrect": True,
     # Wait this long after the last keystroke before asking the model.

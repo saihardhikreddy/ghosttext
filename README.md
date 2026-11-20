@@ -20,7 +20,18 @@ powershell -ExecutionPolicy Bypass -File setup.ps1   # venv + llama.cpp (~40 MB)
 .\GhostText.vbs                                      # starts in the tray, no window (or double-click GhostText.lnk)
 ```
 
-Needs Python 3.11+ on Windows 10/11. The first start takes a few seconds while the
+### Install as an app (GhostText.exe)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1     # PyInstaller -> dist\GhostText\GhostText.exe
+powershell -ExecutionPolicy Bypass -File install.ps1   # -> %LOCALAPPDATA%\Programs\GhostText + Start menu
+```
+
+The installed app has no window: it lives in the tray, starts with Windows (set on first
+launch, toggle in the tray), and **Ctrl+Alt+G** turns it on/off (falls back to
+Ctrl+Shift+G if another app owns that shortcut; the tray menu shows which).
+
+Needs Python 3.11+ on Windows 10/11 to build. The first start takes a few seconds while the
 model loads; the tray menu's first line shows the model status.
 
 Run `python -m ghosttext --debug` from the venv to see status logs in a console.
