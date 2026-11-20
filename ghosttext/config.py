@@ -32,6 +32,9 @@ DEFAULTS = {
     "context_chars": 600,
     # Pause between keys GhostText types. Win11 Notepad garbles faster input.
     "type_delay_ms": 12,
+    # Confidence cut-offs (natural-log probabilities). Lower = longer, riskier suggestions.
+    "min_token_logprob": -2.3,
+    "min_total_logprob": -4.5,
 }
 
 

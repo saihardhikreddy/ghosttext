@@ -93,8 +93,8 @@ class LocalModel:
     # ------------------------------------------------------------ inference
     def _request(self, prompt, n_predict, prefix=""):
         req = {
-            "prompt": prompt, "n_predict": n_predict, "temperature": 0.2, "top_k": 30,
-            "top_p": 0.9, "repeat_penalty": 1.1, "stop": ["\n", "\r"], "cache_prompt": True,
+            "prompt": prompt, "n_predict": n_predict, "temperature": 0, "repeat_penalty": 1.1,
+            "stop": ["\n", "\r"], "cache_prompt": True, "n_probs": 1,
         }
         if prefix:
             # Force the output to start with what the user already typed (token healing).
@@ -121,8 +121,31 @@ class LocalModel:
         out = data.get("content", "")
         if not out.startswith(prefix):
             return None
+        out, cut = confident_part(data.get("completion_probabilities"), out, len(prefix),
+                                  float(self.config["min_token_logprob"]),
+                                  float(self.config["min_total_logprob"]))
         return clean_completion(context, out[len(prefix):], int(self.config["max_words"]),
-                                truncated=bool(data.get("stopped_limit")))
+                                truncated=cut or bool(data.get("stopped_limit")))
+
+
+def confident_part(probs, out, skip_chars, min_token, min_total):
+    """Keep the continuation only while the model is sure of it: stop at the first
+    token it gave less than e^min_token probability, or once the running total
+    drops below e^min_total. Returns (text, was_cut)."""
+    if not probs:
+        return out, False
+    text, seen, total = "", 0, 0.0
+    for p in probs:
+        tok, lp = p.get("token", ""), p.get("logprob", 0.0)
+        if seen < skip_chars:  # the forced prefix the user already typed
+            text += tok
+            seen += len(tok)
+            continue
+        total += lp
+        if lp < min_token or total < min_total:
+            return text, True
+        text += tok
+    return text if text else out, False
 
 
 def split_for_healing(context):
@@ -138,6 +161,8 @@ def split_for_healing(context):
     return context, ""
 
 
+_DANGLING = {"a", "an", "the", "of", "to", "for", "and", "or", "but", "because", "with", "in",
+             "on", "at", "by", "from", "as", "that", "my", "your", "our", "their", "is", "am", "are"}
 _SENT_END = re.compile(r"[.!?](?=\s|$)")
 
 
@@ -167,6 +192,12 @@ def clean_completion(context, out, max_words=6, truncated=False):
             kept.pop()
         kept.pop()  # last word may be cut off mid-way
     out = "".join(kept).rstrip()
+    # A suggestion that stops on "of", "the", "and"... reads like a cliff-hanger; drop those.
+    while True:
+        m = re.search(r"\s+(\S+)$", out)
+        if not m or m.group(1).lower() not in _DANGLING:
+            break
+        out = out[:m.start()]
     if not out.strip() or not re.search(r"\w", out):
         return None
     # Don't suggest something that just repeats the tail of what was typed.

@@ -24,6 +24,7 @@ NAV_KEYS = {w.VK_PRIOR, w.VK_NEXT, w.VK_END, w.VK_HOME, w.VK_LEFT, w.VK_UP, w.VK
             w.VK_DOWN, w.VK_DELETE}
 BOUNDARIES = set(" \n.,!?;:)")
 MAX_BUFFER = 2000
+VK_SNAPSHOT = 0x2C
 WM_REINSTALL_HOOKS = w.WM_APP + 2
 TRACE = False  # set by --trace; logs key codes, so never on by default
 _TAIL_WORD = re.compile(r"([A-Za-z]+(?:'[A-Za-z]+)?)$")
@@ -230,7 +231,9 @@ class Engine:
 
         fix, self.last_fix = self.last_fix, None
 
-        if (ctrl and not altgr) or alt or win:
+        if win or vk == VK_SNAPSHOT:
+            return False  # Win+Shift+S, PrtScn, Win+V...: leave the suggestion on screen
+        if (ctrl and not altgr) or alt:
             self.clear_ghost()
             if ctrl and vk == w.VK_BACK:
                 self.buffer = re.sub(r"\S*\s*$", "", self.buffer)
