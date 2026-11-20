@@ -186,6 +186,7 @@ def main():
     logging.basicConfig(
         filename=APP_DIR / "ghosttext.log", level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.getLogger("comtypes").setLevel(logging.WARNING)
     if "--debug" in sys.argv:
         logging.getLogger().addHandler(logging.StreamHandler())
         logging.getLogger().setLevel(logging.DEBUG)
