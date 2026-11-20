@@ -30,6 +30,8 @@ DEFAULTS = {
     "server_port": 8768,
     "gpu_layers": 99,
     "context_chars": 600,
+    # Pause between keys GhostText types. Win11 Notepad garbles faster input.
+    "type_delay_ms": 12,
 }
 
 

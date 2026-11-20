@@ -265,15 +265,22 @@ LLKHF_EXTENDED = 0x1
 KEYEVENTF_EXTENDEDKEY = 0x1
 
 
-def send_paced(text, backspaces=0, gap=0.004):
-    """Like send_text, but one Backspace at a time: many apps (e.g. Win11 Notepad)
-    drop Backspaces that arrive in a single batch."""
+def send_paced(text, backspaces=0, gap=0.012, target=None):
+    """Like send_text, but one key at a time with a short pause. Apps that handle
+    input asynchronously (Win11 Notepad, other XAML/WinUI apps) drop Backspaces
+    and repeat the wrong character when keys arrive in one batch.
+    Stops early (returns False) if the foreground window changes."""
     import time
-    for _ in range(backspaces):
-        send_text("", backspaces=1)
+    keys = [""] * backspaces + list(text)
+    for ch in keys:
+        if target and GetForegroundWindow() != target:
+            return False
+        if ch == "":
+            send_text("", backspaces=1)
+        else:
+            send_text(ch)
         time.sleep(gap)
-    if text:
-        send_text(text)
+    return True
 
 
 def replay_key(vk, scan, up, extended):

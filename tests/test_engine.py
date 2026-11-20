@@ -41,7 +41,7 @@ class FakeInjector:
 class FakeConfig(dict):
     def __init__(self):
         super().__init__(enabled=True, autocomplete=True, autocorrect=True, debounce_ms=0,
-                         ignored_words=[], excluded_apps=[])
+                         ignored_words=[], excluded_apps=[], type_delay_ms=12)
 
     def __setitem__(self, k, v):
         dict.__setitem__(self, k, v)

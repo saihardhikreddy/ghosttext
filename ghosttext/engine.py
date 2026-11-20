@@ -55,6 +55,7 @@ class Engine:
         self.stats = {"accepted": 0, "fixed": 0}
         self.worker = Worker(self)
         self.injector = Injector()
+        self.injector.gap = max(0, float(config["type_delay_ms"] or 0)) / 1000
         overlay.on_show = self._on_overlay_show
 
     # ------------------------------------------------------------- setup
@@ -463,6 +464,7 @@ class Injector(threading.Thread):
         self.lock = threading.Lock()
         self.busy = False
         self.held = []
+        self.gap = 0.012  # seconds between injected keys (config: type_delay_ms)
 
     def submit(self, text, backspaces):
         with self.lock:
@@ -477,7 +479,7 @@ class Injector(threading.Thread):
         while True:
             text, backspaces = self.q.get()
             try:
-                w.send_paced(text, backspaces)
+                w.send_paced(text, backspaces, self.gap, w.GetForegroundWindow())
             except Exception:
                 log.exception("injection failed")
             while True:
@@ -491,3 +493,4 @@ class Injector(threading.Thread):
                         break
                 for ev in held:
                     w.replay_key(*ev)
+                    time.sleep(self.gap / 2)
