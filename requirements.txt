@@ -1,0 +1,4 @@
+pystray==0.19.5
+pillow>=10
+symspellpy>=6.7
+comtypes>=1.4
