@@ -6,3 +6,4 @@ models/
 dist/
 build/
 *.spec
+GhostText.lnk

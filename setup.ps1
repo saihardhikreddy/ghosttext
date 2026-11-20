@@ -26,4 +26,12 @@ if (-not (Get-ChildItem models\*.gguf -ErrorAction SilentlyContinue)) {
   curl.exe -L --fail -o models\model.gguf.part $ModelUrl
   Rename-Item models\model.gguf.part ([IO.Path]::GetFileName($ModelUrl))
 }
-Write-Host "Done. Start GhostText with:  .\.venv\Scripts\pythonw GhostText.pyw"
+# Double-clickable shortcut (no console window); pin it to Start or copy it to the desktop.
+$ws = New-Object -ComObject WScript.Shell
+$lnk = $ws.CreateShortcut("$PSScriptRoot\GhostText.lnk")
+$lnk.TargetPath = "$PSScriptRoot\.venv\Scripts\pythonw.exe"
+$lnk.Arguments = '"' + "$PSScriptRoot\GhostText.pyw" + '"'
+$lnk.WorkingDirectory = $PSScriptRoot
+$lnk.IconLocation = "$PSScriptRoot\ghosttext.ico"
+$lnk.Save()
+Write-Host "Done. Start GhostText by double-clicking GhostText.lnk (or GhostText.vbs)."
