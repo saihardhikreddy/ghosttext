@@ -29,8 +29,9 @@ class LocalModel:
             self.status = "llama-server.exe not found (run setup.ps1)"
             return
         if not model or not model.exists():
-            self.status = "no model in models\\ (run setup.ps1)"
-            return
+            model = self._download_model()
+            if not model:
+                return
         if self._healthy():  # already running (e.g. app restarted)
             self.status = "ready"
             return
@@ -56,6 +57,33 @@ class LocalModel:
                 return
             time.sleep(0.5)
         self.status = "server did not become ready"
+
+    def _download_model(self):
+        """First launch of a fresh install: fetch the model (~1 GB) next to the app.
+        Autocorrect works meanwhile; the tray shows progress."""
+        import urllib.request
+        from .config import ROOT
+        url = self.config["model_url"]
+        dest = ROOT / "models" / url.rsplit("/", 1)[-1].split("?")[0]
+        part = dest.with_suffix(dest.suffix + ".part")
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            log.info("downloading model from %s", url)
+            req = urllib.request.Request(url, headers={"User-Agent": "GhostText"})
+            with urllib.request.urlopen(req, timeout=30) as r, open(part, "wb") as f:
+                total = int(r.headers.get("Content-Length") or 0)
+                done = 0
+                while chunk := r.read(1 << 20):
+                    f.write(chunk)
+                    done += len(chunk)
+                    pct = f"{done * 100 // total}%" if total else f"{done >> 20} MB"
+                    self.status = f"downloading model {pct} (one-time)"
+            part.replace(dest)
+            return dest
+        except Exception as e:
+            log.exception("model download failed")
+            self.status = f"model download failed: {e.__class__.__name__} (restart to retry)"
+            return None
 
     def _log_path(self):
         from .config import APP_DIR

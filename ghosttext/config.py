@@ -32,6 +32,8 @@ DEFAULTS = {
     "ignored_words": [],
     # Model / llama.cpp server. Empty model_path = first .gguf in the models folder.
     "model_path": "",
+    # Downloaded on first launch if models\ is empty.
+    "model_url": "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
     "server_exe": "",
     "server_port": 8768,
     "gpu_layers": 99,

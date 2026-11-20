@@ -13,7 +13,15 @@ offline on your own PC. Nothing you type leaves the machine.
 - **Tray icon:** turn it on/off, toggle autocomplete or autocorrect, turn it off for the
   current app, start with Windows.
 
-## Setup
+## Download
+
+Grab `GhostText-<version>-win64.zip` from [Releases](../../releases), unzip it anywhere
+(e.g. `%LOCALAPPDATA%\Programs\GhostText`) and run `GhostText.exe`. It appears in the
+tray, downloads the ~1 GB model once (autocorrect works meanwhile; the tray menu shows
+progress), and from then on starts with Windows. Windows SmartScreen may warn because the
+exe isn't code-signed: **More info → Run anyway**.
+
+## Build from source
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File setup.ps1   # venv + llama.cpp (~40 MB) + model (~1 GB)
