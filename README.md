@@ -17,7 +17,7 @@ offline on your own PC. Nothing you type leaves the machine.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File setup.ps1   # venv + llama.cpp (~40 MB) + model (~1 GB)
-.\GhostText.cmd                                      # starts in the tray (no console)
+.\GhostText.vbs                                      # starts in the tray, no window (or double-click GhostText.lnk)
 ```
 
 Needs Python 3.11+ on Windows 10/11. The first start takes a few seconds while the
