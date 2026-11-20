@@ -229,7 +229,7 @@ class Engine:
                 self._swallow_up.add(vk)
                 return True
 
-        fix, self.last_fix = self.last_fix, None
+        self.last_fix = None
 
         if win or vk == VK_SNAPSHOT:
             return False  # Win+Shift+S, PrtScn, Win+V...: leave the suggestion on screen

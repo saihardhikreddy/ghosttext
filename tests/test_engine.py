@@ -146,6 +146,17 @@ def test_typing_through_ghost_keeps_it():
     assert e.ghost is None
 
 
+def test_lowercase_names_left_alone():
+    for name in ["priya", "reddy", "kiran", "ravi", "teja", "rahul", "hardhik", "sneha"]:
+        assert _AC.correct(name) is None, name
+
+
+def test_finger_slips_fixed():
+    for typo, fix in [("wwter", "water"), ("ooint", "point"), ("thsi", "this"), ("realy", "really"),
+                      ("meetign", "meeting"), ("peopel", "people"), ("lazzy", "lazy")]:
+        assert _AC.correct(typo) == fix, (typo, _AC.correct(typo))
+
+
 def test_clean_completion():
     assert clean_completion("I am going to the ", " store to buy milk. Then home") == "store to buy milk."
     assert clean_completion("Thanks for your hel", "p with the project.") == "p with the project."

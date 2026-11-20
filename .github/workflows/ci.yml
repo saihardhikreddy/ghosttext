@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt pyflakes
+      - run: python -m pyflakes ghosttext
+      - run: python tests/test_engine.py
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build GhostText.exe and the release zip
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python -m pip install -q -r requirements.txt
+          New-Item -ItemType Directory -Force bin | Out-Null
+          $zip = "llama-b12567-bin-win-vulkan-x64.zip"
+          curl.exe -L --fail -o "bin\$zip" "https://github.com/ggml-org/llama.cpp/releases/download/b12567/$zip"
+          Expand-Archive "bin\$zip" -DestinationPath bin -Force
+          Remove-Item "bin\$zip"
+          ./release.ps1
+      - name: Attach the zip to the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = Get-ChildItem dist\GhostText-*-win64.zip | Select-Object -First 1
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --title "GhostText $env:GITHUB_REF_NAME" --generate-notes }
+          gh release upload $env:GITHUB_REF_NAME $zip.FullName --clobber

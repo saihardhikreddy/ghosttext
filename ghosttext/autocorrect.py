@@ -38,6 +38,49 @@ TYPOS = {
 _WORD = re.compile(r"[A-Za-z]+(?:'[A-Za-z]+)?")
 
 
+_ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
+_POS = {c: (r, i + 0.5 * r) for r, row in enumerate(_ROWS) for i, c in enumerate(row)}
+
+
+def adjacent(a, b):
+    """True if keys a and b touch on a QWERTY keyboard."""
+    if a not in _POS or b not in _POS:
+        return False
+    (r1, c1), (r2, c2) = _POS[a], _POS[b]
+    return abs(r1 - r2) <= 1 and abs(c1 - c2) <= 1.0 and (a != b)
+
+
+MIN_COUNT = 2_500_000         # candidate must be a reasonably common word...
+MIN_COUNT_FIRST = 10_000_000  # ...and very common if the first letter changes
+
+
+def plausible_typo(typed, cand, count):
+    """Could a finger slip turn `cand` into `typed`? (one edit; two for long words)"""
+    if count < MIN_COUNT:
+        return False
+    lt, lc = len(typed), len(cand)
+    i = next((k for k in range(min(lt, lc)) if typed[k] != cand[k]), min(lt, lc))
+    if lt == lc:
+        diffs = [k for k in range(lt) if typed[k] != cand[k]]
+        if len(diffs) == 2 and diffs[1] == diffs[0] + 1 and \
+                typed[diffs[0]] == cand[diffs[1]] and typed[diffs[1]] == cand[diffs[0]]:
+            return True  # swapped neighbours: "thsi" -> "this"
+        if len(diffs) == 1:  # one wrong key: must be a neighbouring key
+            if not adjacent(typed[i], cand[i]):
+                return False
+            return i > 0 or count >= MIN_COUNT_FIRST
+        return len(typed) >= 6 and typed[0] == cand[0] and count >= 5_000_000
+    if lt == lc + 1:  # an extra key: doubled, or a neighbour of the keys around it
+        extra = typed[i]
+        near = [typed[k] for k in (i - 1, i + 1) if 0 <= k < lt]
+        if extra in near:
+            return True
+        return i > 0 and any(adjacent(extra, n) for n in near)
+    if lc == lt + 1:  # a missed key ("realy" -> "really"), not the first one
+        return i > 0
+    return len(typed) >= 6 and typed[0] == cand[0] and count >= 5_000_000
+
+
 def match_case(src, dst):
     if src.isupper() and len(src) > 1:
         return dst.upper()
@@ -98,6 +141,9 @@ class AutoCorrect:
         max_dist = 2 if len(lower) >= 6 else 1
         hits = self.sym.lookup(lower, self._verbosity.CLOSEST, max_edit_distance=max_dist,
                                include_unknown=False)
+        # Keep only fixes that look like a slip of the finger, so names typed in lowercase
+        # ("priya", "reddy", "kiran") don't become "oriya", "ready", "iran".
+        hits = [h for h in hits if plausible_typo(lower, h.term, h.count)]
         if not hits:
             return None
         hits.sort(key=lambda s: (s.distance, -s.count))
