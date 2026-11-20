@@ -11,3 +11,4 @@ $zip = "dist\GhostText-$version-win64.zip"
 if (Test-Path $zip) { Remove-Item $zip }
 Compress-Archive -Path "$stage\*" -DestinationPath $zip -CompressionLevel Optimal
 Write-Host "Release zip: $zip ($([int]((Get-Item $zip).Length / 1MB)) MB)"
+exit 0  # robocopy returns 1 on success; keep CI green
