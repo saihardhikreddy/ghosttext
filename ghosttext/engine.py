@@ -64,13 +64,17 @@ class Engine:
         """Call on the UI thread (it must pump messages)."""
         # Warm up COM/UI Automation first: importing those big modules holds Python's
         # GIL long enough that Windows would time out (and drop) our hooks.
-        self.worker.start()
+        if not self.worker.is_alive():
+            self.worker.start()
         self.worker.ready.wait(15)
-        self.injector.start()
+        if not self.injector.is_alive():
+            self.injector.start()
         self._kb_proc = w.HOOKPROC(self._kb_hook)
         self._ms_proc = w.HOOKPROC(self._mouse_hook)
         self._hook()
-        threading.Thread(target=self._watchdog, name="hook-watchdog", daemon=True).start()
+        if not getattr(self, "_watchdog_started", False):
+            self._watchdog_started = True
+            threading.Thread(target=self._watchdog, name="hook-watchdog", daemon=True).start()
 
     def _hook(self):
         hmod = w.GetModuleHandleW(None)

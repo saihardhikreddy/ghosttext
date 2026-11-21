@@ -7,6 +7,7 @@ import ctypes  # noqa: E402
 import logging  # noqa: E402
 import os  # noqa: E402
 import threading  # noqa: E402
+import time  # noqa: E402
 import winreg  # noqa: E402
 from ctypes import wintypes as wt  # noqa: E402
 
@@ -99,6 +100,7 @@ class App:
         self.icon = None
         self._ui_ready = threading.Event()
         self.hotkey = None
+        self._stopping = False
 
     # ------------------------------------------------------------ threads
     def _ui_loop(self):
@@ -107,7 +109,13 @@ class App:
         from .engine import WM_REINSTALL_HOOKS
         try:
             self.overlay.create()
-            self.engine.install()
+            for attempt in range(10):  # right after login the desktop may not be ready yet
+                try:
+                    self.engine.install()
+                    break
+                except OSError:
+                    log.exception("installing input hooks failed (attempt %d)", attempt + 1)
+                    time.sleep(2)
             # Use the configured shortcut, or the first free fallback if another app owns it.
             for hk in [self.config["hotkey"], "ctrl+shift+g", "ctrl+alt+h", "ctrl+shift+h"]:
                 mods, vk = parse_hotkey(hk)
@@ -115,18 +123,35 @@ class App:
                     self.hotkey = hk
                     break
                 log.warning("hotkey %s is taken by another app", hk)
+        except Exception:
+            log.exception("input thread setup failed")
         finally:
             self._ui_ready.set()
         msg = wt.MSG()
-        while w.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
-            if msg.message == WM_REINSTALL_HOOKS and not msg.hwnd:
-                self.engine.reinstall()
+        # This thread owns the keyboard hook: if it ever stops pumping messages GhostText
+        # silently stops seeing keys. So it only exits when we quit on purpose.
+        while True:
+            r = w.GetMessageW(ctypes.byref(msg), None, 0, 0)
+            if r == 0:
+                if self._stopping:
+                    break
+                log.warning("input thread got an unexpected quit message; keeping it alive")
                 continue
-            if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
-                self.set_enabled(not self.config["enabled"], announce=True)
+            if r == -1:
+                log.error("GetMessage failed (%s)", ctypes.get_last_error())
+                time.sleep(0.2)
                 continue
-            w.TranslateMessage(ctypes.byref(msg))
-            w.DispatchMessageW(ctypes.byref(msg))
+            try:
+                if msg.message == WM_REINSTALL_HOOKS and not msg.hWnd:
+                    self.engine.reinstall()
+                    continue
+                if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
+                    self.set_enabled(not self.config["enabled"], announce=True)
+                    continue
+                w.TranslateMessage(ctypes.byref(msg))
+                w.DispatchMessageW(ctypes.byref(msg))
+            except Exception:
+                log.exception("input thread: message handling failed")
         self.engine.uninstall()
 
     def set_enabled(self, on, announce=False):
@@ -250,6 +275,7 @@ class App:
         threading.Timer(1.5, self._first_run).start()
 
     def shutdown(self):
+        self._stopping = True
         if self.ui_thread_id:
             w.PostThreadMessageW(self.ui_thread_id, w.WM_QUIT, 0, 0)
         self.model.stop()
@@ -268,6 +294,10 @@ def main():
     if "--trace" in sys.argv:
         from . import engine
         engine.TRACE = True
+    # No console in the packaged app: make sure crashes in any thread reach the log.
+    threading.excepthook = lambda a: log.error("thread %s crashed", a.thread and a.thread.name,
+                                               exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
+    sys.excepthook = lambda *exc: log.error("crash", exc_info=exc)
     w.set_dpi_aware()
     mutex = w.single_instance()
     if mutex is None:
