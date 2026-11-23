@@ -196,6 +196,20 @@ def split_for_healing(context):
 _DANGLING = {"a", "an", "the", "of", "to", "for", "and", "or", "but", "because", "with", "in",
              "on", "at", "by", "from", "as", "that", "my", "your", "our", "their", "is", "am", "are"}
 _SENT_END = re.compile(r"[.!?](?=\s|$)")
+# A full stop after these is part of the word, not the end of the sentence.
+_ABBREV = {"mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "vs", "e.g", "i.e", "approx"}
+
+
+def _sentence_end(context, out):
+    """Where the first sentence of `out` ends, skipping abbreviations like "Dr." or "e.g."
+    (`context` matters when `out` finishes a word the user started: "D" + "r. Rao")."""
+    for m in _SENT_END.finditer(out):
+        if m.group(0) == ".":
+            word = re.search(r"[\w.]*$", context[-10:] + out[:m.start()]).group(0).lower()
+            if word in _ABBREV:
+                continue
+        return m
+    return None
 
 
 def clean_completion(context, out, max_words=6, truncated=False):
@@ -206,7 +220,7 @@ def clean_completion(context, out, max_words=6, truncated=False):
     if context.endswith((" ", "\t", "\n")):
         out = out.lstrip()
     out = re.sub(r" {2,}", " ", out)
-    m = _SENT_END.search(out)
+    m = _sentence_end(context, out)
     if m:
         out = out[:m.end()]
         truncated = False

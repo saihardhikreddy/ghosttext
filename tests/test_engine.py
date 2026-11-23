@@ -164,6 +164,14 @@ def test_clean_completion():
     assert clean_completion("Let me know if", " you have any questions or concer", 4, truncated=True) == " you have any questions"
 
 
+def test_clean_completion_keeps_abbreviations():
+    # "Dr." and "e.g." don't end the sentence, so the suggestion isn't cut to one word.
+    assert clean_completion("I have an appointment with ", " Dr. Rao tomorrow. See you") == "Dr. Rao tomorrow."
+    assert clean_completion("bring snacks, ", " e.g. chips and juice. Thanks") == "e.g. chips and juice."
+    assert clean_completion("an appointment with D", "r. Rao at noon. Ok") == "r. Rao at noon."
+    assert clean_completion("see ", " you soon. No worries") == "you soon."
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
