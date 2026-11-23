@@ -1,5 +1,6 @@
 """User settings, stored as JSON in %APPDATA%\\GhostText\\config.json."""
 import json
+import logging
 import os
 import sys
 import threading
@@ -8,6 +9,7 @@ from pathlib import Path
 APP_DIR = Path(os.environ.get("APPDATA", Path.home())) / "GhostText"
 CONFIG_PATH = APP_DIR / "config.json"
 FROZEN = getattr(sys, "frozen", False)
+log = logging.getLogger(__name__)
 # Where bin\ and models\ live: next to GhostText.exe, or the source checkout.
 ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 
@@ -55,11 +57,24 @@ class Config:
     def load(self):
         try:
             with open(CONFIG_PATH, encoding="utf-8") as f:
-                self.data.update(json.load(f))
+                saved = json.load(f)
+            if not isinstance(saved, dict):
+                raise ValueError("config.json must hold a JSON object")
+            self.data.update(saved)
         except FileNotFoundError:
             self.save()
-        except Exception:
-            pass
+        except OSError as e:  # e.g. locked by another program: keep the settings in use
+            log.warning("could not read config.json (%s); settings unchanged", e)
+        except ValueError as e:
+            # A hand edit with a typo: keep the settings in use (the defaults at startup),
+            # but don't lose the edit. The next setting change saves over config.json,
+            # so move it aside first.
+            bad = CONFIG_PATH.with_suffix(".json.bad")
+            log.warning("config.json unreadable (%s); settings unchanged, kept it as %s", e, bad.name)
+            try:
+                os.replace(CONFIG_PATH, bad)
+            except OSError:
+                pass
 
     def save(self):
         with self._lock:

@@ -172,6 +172,25 @@ def test_clean_completion_keeps_abbreviations():
     assert clean_completion("see ", " you soon. No worries") == "you soon."
 
 
+def test_broken_config_is_kept_not_overwritten():
+    import json
+    import tempfile
+    from pathlib import Path
+    from ghosttext import config as cfgmod
+    old = cfgmod.APP_DIR, cfgmod.CONFIG_PATH
+    with tempfile.TemporaryDirectory() as d:
+        cfgmod.APP_DIR, cfgmod.CONFIG_PATH = Path(d), Path(d) / "config.json"
+        try:
+            cfgmod.CONFIG_PATH.write_text('{"max_words": 9,}', encoding="utf-8")  # trailing comma
+            c = cfgmod.Config()
+            assert c["max_words"] == cfgmod.DEFAULTS["max_words"]
+            c["max_words"] = 7  # saving a setting must not destroy the user's edits
+            assert (Path(d) / "config.json.bad").read_text(encoding="utf-8") == '{"max_words": 9,}'
+            assert json.loads(cfgmod.CONFIG_PATH.read_text(encoding="utf-8"))["max_words"] == 7
+        finally:
+            cfgmod.APP_DIR, cfgmod.CONFIG_PATH = old
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

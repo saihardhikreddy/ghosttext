@@ -101,6 +101,7 @@ with Windows.
 ## Settings
 
 Tray → **Open settings file** (`%APPDATA%\GhostText\config.json`), then **Reload settings**.
+If the file isn't valid JSON (a trailing comma is the usual slip), GhostText keeps the settings it has, renames your file to `config.json.bad` so it isn't overwritten, and says so in the log. Fix it and save it back as `config.json`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
